@@ -24,6 +24,7 @@ import {
 import { defaultMarkdownTemplate, type ContentFile } from './content-rules';
 import { buildContentFilePath } from './editor-rules';
 import { getGitProvider } from './git-providers';
+import { buildGitHubOAuthUrl, exchangeGitHubOAuthCode } from './oauth-rules';
 import {
   assertProjectRole,
   isProjectRole,
@@ -57,6 +58,7 @@ interface ProjectMemberSummary extends PlainwriteProjectMember {
 interface CredentialSummary {
   provider: string;
   authType: string;
+  connectionId: string | null;
   providerLogin: string | null;
   status: string;
   lastError: string | null;
@@ -68,6 +70,12 @@ interface CredentialSummary {
 interface ProjectDetail extends ProjectSummary {
   members: ProjectMemberSummary[];
   credential: CredentialSummary | null;
+}
+
+interface GitHubOAuthStatus {
+  configured: boolean;
+  source: string;
+  missingRequired: readonly string[];
 }
 
 interface CollectionSchemaSummary {
@@ -246,6 +254,7 @@ export async function getProject(projectId: string): Promise<ProjectDetail> {
       ? {
           provider: credential.provider,
           authType: credential.authType,
+          connectionId: credential.connectionId,
           providerLogin: credential.providerLogin,
           status: credential.status,
           lastError: credential.lastError,
@@ -264,6 +273,25 @@ export async function getProject(projectId: string): Promise<ProjectDetail> {
       };
     }),
   };
+}
+
+export async function getGitHubOAuthStatus(projectId: string): Promise<GitHubOAuthStatus> {
+  const { db, userId, tenantId } = await getContext();
+  await requireProjectRole(db, tenantId, projectId, userId, 'viewer');
+  try {
+    const config = await sdk.connections.getProviderConfig('git.github');
+    return {
+      configured: config.configured,
+      source: config.source,
+      missingRequired: config.missingRequired,
+    };
+  } catch {
+    return {
+      configured: false,
+      source: 'missing',
+      missingRequired: ['provider config'],
+    };
+  }
 }
 
 export async function getProjectNavigation(projectId: string) {
@@ -866,13 +894,136 @@ export async function connectGitHubPat(projectId: string, formData: FormData) {
   revalidateProject(projectId);
 }
 
+export async function startGitHubOAuth(projectId: string) {
+  const { db, userId, tenantId } = await getContext();
+  await requireProjectRole(db, tenantId, projectId, userId, 'editor');
+  await getProjectRow(db, tenantId, projectId);
+  const config = await sdk.connections.getProviderConfig('git.github');
+  const state = await sdk.connections.createOAuthState({
+    provider: 'git.github',
+    callbackPath: '/oauth/github/callback',
+    metadata: { projectId },
+    expiresInSeconds: 600,
+  });
+  redirect(buildGitHubOAuthUrl(config, state));
+}
+
+export async function completeGitHubOAuthCallback(input: {
+  code: string;
+  state: string;
+}): Promise<string> {
+  const { db, userId, tenantId } = await getContext();
+  const state = await sdk.connections.verifyOAuthState(input.state);
+  if (state.provider !== 'git.github') throw new Error('OAuth state provider did not match GitHub.');
+  const projectId = typeof state.metadata?.projectId === 'string' ? state.metadata.projectId : null;
+  if (!projectId) throw new Error('OAuth state did not include a Plainwrite project.');
+
+  await requireProjectRole(db, tenantId, projectId, userId, 'editor');
+  const project = await getProjectRow(db, tenantId, projectId);
+  const config = await sdk.connections.getProviderConfig('git.github');
+  const tokens = await exchangeGitHubOAuthCode(config, input.code);
+  const provider = getGitProvider(project.provider);
+  const userInfo = await provider.validatePat(tokens.accessToken, project);
+  const existingCredential = await getCredentialRow(db, tenantId, projectId, userId);
+  const existingConnection = await findGitHubProjectConnection(projectId);
+  const secretLabel = `Plainwrite GitHub OAuth token for ${project.repoOwner}/${project.repoName}`;
+  let secretRef = existingConnection?.secretRef ?? null;
+
+  if (secretRef) {
+    await sdk.secrets.update(secretRef, tokens.accessToken);
+  } else {
+    const secret = await sdk.secrets.create({
+      scope: 'user',
+      label: secretLabel,
+      value: tokens.accessToken,
+      metadata: {
+        provider: 'github',
+        projectId,
+        repo: `${project.repoOwner}/${project.repoName}`,
+        authType: 'oauth',
+      },
+    });
+    secretRef = secret.id;
+  }
+
+  const connectionMetadata = {
+    projectId,
+    repo: `${project.repoOwner}/${project.repoName}`,
+    login: userInfo.login,
+    authType: 'oauth',
+    tokenExpiresAt: tokens.expiresAt ?? null,
+  };
+  const connection = existingConnection
+    ? await sdk.connections.update(existingConnection.id, {
+        label: secretLabel,
+        status: 'connected',
+        secretRef,
+        metadata: connectionMetadata,
+        lastCheckedAt: now(),
+      })
+    : await sdk.connections.create({
+        scope: 'user',
+        provider: 'git.github',
+        label: secretLabel,
+        secretRef,
+        metadata: connectionMetadata,
+      });
+
+  const ts = now();
+  const credentialValues = {
+    tenantId,
+    projectId,
+    userId,
+    provider: 'github',
+    authType: 'oauth',
+    connectionId: connection.id,
+    secretRef,
+    tokenExpiresAt: tokens.expiresAt ?? null,
+    providerLogin: userInfo.login,
+    status: 'connected',
+    lastError: null,
+    createdAt: existingCredential?.createdAt ?? ts,
+    updatedAt: ts,
+  };
+
+  if (existingCredential) {
+    await db
+      .update(plainwriteCredentials)
+      .set(credentialValues)
+      .where(
+        and(
+          eq(plainwriteCredentials.tenantId, tenantId),
+          eq(plainwriteCredentials.projectId, projectId),
+          eq(plainwriteCredentials.userId, userId),
+        ),
+      );
+    if (
+      existingCredential.authType === 'pat' &&
+      existingCredential.secretRef &&
+      existingCredential.secretRef !== secretRef &&
+      !existingCredential.secretRef.startsWith('revoked:')
+    ) {
+      await sdk.secrets.delete(existingCredential.secretRef).catch(() => undefined);
+    }
+  } else {
+    await db.insert(plainwriteCredentials).values(credentialValues);
+  }
+
+  revalidateProject(projectId);
+  return projectId;
+}
+
 export async function disconnectGitHubCredential(projectId: string) {
   const { db, userId, tenantId } = await getContext();
   await requireProjectRole(db, tenantId, projectId, userId, 'editor');
   const existing = await getCredentialRow(db, tenantId, projectId, userId);
   if (!existing) return;
 
-  await sdk.secrets.delete(existing.secretRef);
+  if (existing.connectionId) {
+    await sdk.connections.disconnect(existing.connectionId);
+  } else {
+    await sdk.secrets.delete(existing.secretRef);
+  }
   await db
     .update(plainwriteCredentials)
     .set({
@@ -1184,6 +1335,18 @@ async function resolveGitHubCredential(
   if (!credential || credential.status !== 'connected') {
     return { token: null, credential };
   }
+  if (credential.tokenExpiresAt && credential.tokenExpiresAt <= now() + 60) {
+    await markCredentialError(db, tenantId, projectId, userId, 'Credential token expired. Reconnect GitHub.');
+    if (credential.connectionId) {
+      await sdk.connections
+        .markError(credential.connectionId, {
+          status: 'needs_reauth',
+          error: { code: 'token_expired', message: 'Credential token expired. Reconnect GitHub.' },
+        })
+        .catch(() => undefined);
+    }
+    return { token: null, credential };
+  }
   if (!credential.secretRef || credential.secretRef.startsWith('revoked:')) {
     return { token: null, credential };
   }
@@ -1194,11 +1357,28 @@ async function resolveGitHubCredential(
       await markCredentialError(db, tenantId, projectId, userId, 'Credential secret is missing.');
       return { token: null, credential };
     }
+    if (credential.connectionId) {
+      await sdk.connections.markUsed(credential.connectionId).catch(() => undefined);
+    }
     return { token, credential };
   } catch {
     await markCredentialError(db, tenantId, projectId, userId, 'Credential secret could not be read.');
     return { token: null, credential };
   }
+}
+
+async function findGitHubProjectConnection(projectId: string) {
+  const connections = await sdk.connections.list({
+    provider: 'git.github',
+    scope: 'user',
+    includeDisconnected: true,
+  });
+  return (
+    connections.find((connection) => {
+      const metadata = connection.metadata;
+      return metadata?.projectId === projectId && metadata?.authType === 'oauth';
+    }) ?? null
+  );
 }
 
 async function markCredentialError(

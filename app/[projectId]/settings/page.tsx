@@ -4,6 +4,7 @@ import {
   archiveProject,
   connectGitHubPat,
   disconnectGitHubCredential,
+  getGitHubOAuthStatus,
   getProject,
   hardDeleteProject,
   inviteProjectMember,
@@ -11,6 +12,7 @@ import {
   removeProjectMember,
   resetCollectionSchema,
   restoreProject,
+  startGitHubOAuth,
   updateCollectionSchema,
   updateProjectSettings,
 } from '../../_lib/actions';
@@ -23,9 +25,10 @@ interface SettingsPageProps {
 
 export default async function ProjectSettingsPage({ params }: SettingsPageProps) {
   const { projectId } = await params;
-  const [project, schemas] = await Promise.all([
+  const [project, schemas, oauthStatus] = await Promise.all([
     getProject(projectId).catch(() => null),
     listCollectionSchemas(projectId).catch(() => []),
+    getGitHubOAuthStatus(projectId).catch(() => null),
   ]);
   if (!project) notFound();
   const userCanEdit = canEditProject(project.currentUserRole);
@@ -104,7 +107,7 @@ export default async function ProjectSettingsPage({ params }: SettingsPageProps)
           <div>
             <h2 id="github-credential">GitHub credential</h2>
             <p className={styles.panelDescription}>
-              Connect a personal access token for sync and publishing as your GitHub user.
+              Connect GitHub OAuth when configured, or use a personal access token fallback.
             </p>
           </div>
           <StatusBadge status={project.credential?.status === 'connected' ? 'synced' : 'warning'}>
@@ -127,6 +130,10 @@ export default async function ProjectSettingsPage({ params }: SettingsPageProps)
               <dd>{project.credential.authType.toUpperCase()}</dd>
             </div>
             <div>
+              <dt>Connection</dt>
+              <dd>{project.credential.connectionId ? 'Platform-managed' : 'Plainwrite token'}</dd>
+            </div>
+            <div>
               <dt>Last updated</dt>
               <dd>{formatTimestamp(project.credential.updatedAt)}</dd>
             </div>
@@ -139,6 +146,22 @@ export default async function ProjectSettingsPage({ params }: SettingsPageProps)
 
         {userCanEdit ? (
           <div className={styles.credentialForms}>
+            {oauthStatus?.configured ? (
+              <form action={startGitHubOAuth.bind(null, project.id)} className={styles.form}>
+                <p className={styles.helpText}>
+                  GitHub OAuth is configured for this instance. Authorization opens GitHub and
+                  stores the returned token in the platform secret vault.
+                </p>
+                <button type="submit">
+                  {project.credential?.authType === 'oauth' ? 'Reconnect GitHub' : 'Connect GitHub'}
+                </button>
+              </form>
+            ) : (
+              <p className={styles.helpText}>
+                GitHub OAuth is not configured for this instance. PAT fallback remains available.
+              </p>
+            )}
+
             <form action={connectGitHubPat.bind(null, project.id)} className={styles.form}>
               <label>
                 <span>Personal access token</span>

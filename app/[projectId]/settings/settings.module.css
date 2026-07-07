@@ -90,7 +90,7 @@
 .credentialDetails {
   display: grid;
   gap: var(--sv-space-3);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   margin: 0;
 }
 

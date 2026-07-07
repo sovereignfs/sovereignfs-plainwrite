@@ -449,9 +449,30 @@ Verification:
   staged deletion, and schema inference.
 - Run typecheck and tests.
 
-### PLW-009 Add GitHub OAuth Through Connections
+### ✅ PLW-009 Add GitHub OAuth Through Connections
 
 **Spec refs:** PLW-06, PLW-07, OAuth flow, SDK dependencies.
+
+**Status:** ✅ Complete.
+
+Progress as of 2026-07-07:
+
+- [x] Uses the manifest-declared `git.github` provider config through
+  `sdk.connections`.
+- [x] Starts GitHub OAuth with `sdk.connections.createOAuthState()` and the
+  effective provider callback URL/scopes.
+- [x] Verifies callback state with `sdk.connections.verifyOAuthState()`.
+- [x] Exchanges GitHub authorization codes server-side and stores access tokens
+  in `sdk.secrets`.
+- [x] Creates or updates `sdk.connections` metadata with provider login,
+  project/repository metadata, and `secret_ref`.
+- [x] Stores Plainwrite credential metadata linked to `connection_id` and
+  `secret_ref`.
+- [x] Marks expiring OAuth-backed credentials as `needs_reauth` before use.
+- [x] Keeps PAT fallback visible when OAuth provider config is missing.
+- [x] Added tests for OAuth URL construction, scope normalization, token
+  exchange, and missing config handling.
+- [x] Verified plugin tests and typecheck pass.
 
 Add hosted GitHub OAuth after PAT-backed sync and publishing are stable.
 

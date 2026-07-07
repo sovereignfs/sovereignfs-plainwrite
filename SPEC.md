@@ -128,7 +128,7 @@ Proposed `manifest.json`:
         "id": "git.github",
         "title": "GitHub",
         "callbackPath": "/oauth/github/callback",
-        "scopes": ["user"],
+        "scopes": ["repo", "read:user"],
         "config": {
           "public": {
             "clientId": {
