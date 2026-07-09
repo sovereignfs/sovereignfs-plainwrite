@@ -173,11 +173,11 @@ Verification:
 - Add unit/integration tests for project CRUD and role checks.
 - Run typecheck and tests.
 
-### PLW-004 Implement GitHub PAT Credentials With Secret Vault
+### ✅ PLW-004 Implement GitHub PAT Credentials With Secret Vault
 
 **Spec refs:** PLW-06, PLW-07, OAuth flow, Credential encryption.
 
-**Status:** Implementation complete; credential tests still pending.
+**Status:** ✅ Complete.
 
 Progress as of 2026-07-07:
 
@@ -188,14 +188,16 @@ Progress as of 2026-07-07:
   `secret_ref`, provider, `auth_type`, provider login, status, and sanitized
   error metadata.
 - [x] Reconnecting creates or rotates the platform vault secret without exposing
-  the token.
+  the token; reconnecting from `needs_reauth` reuses the existing PAT-owned
+  secret instead of orphaning it.
 - [x] Disconnect deletes the platform vault secret and marks the credential
-  disconnected without deleting drafts.
+  disconnected without deleting drafts; tolerates the vault secret or OAuth
+  connection already being gone.
 - [x] Sync and editor file reads use the current user's connected token when
   available and require it for private repositories.
 - [x] Documented required GitHub token contents read/write permissions in UI
   help copy and README.
-- [ ] Add tests proving token values are not written to plugin tables.
+- [x] Added tests proving token values are not written to plugin tables.
 
 Implement PAT-backed GitHub connection before OAuth.
 

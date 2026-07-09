@@ -879,8 +879,15 @@ export async function connectGitHubPat(projectId: string, formData: FormData) {
   const provider = getGitProvider(project.provider);
   const credentialMetadata = await provider.validatePat(token, project);
   const secretLabel = `Plainwrite GitHub token for ${project.repoOwner}/${project.repoName}`;
+  // Reuse the existing vault secret whenever one exists (not just when
+  // status is currently "connected") so reconnecting from `needs_reauth` —
+  // the common recovery path after a revoked/expired token — rotates the
+  // same secret instead of abandoning it and creating a new orphaned vault
+  // entry. Only a PAT-owned secretRef is reused; an OAuth credential's
+  // secretRef is owned by its sdk.connections record and must not be
+  // mutated directly here.
   let secretRef =
-    existing?.status === 'connected' && !existing.secretRef.startsWith('revoked:')
+    existing?.authType === 'pat' && existing.secretRef && !existing.secretRef.startsWith('revoked:')
       ? existing.secretRef
       : null;
   if (secretRef) {
@@ -1059,10 +1066,18 @@ export async function disconnectGitHubCredential(projectId: string) {
   const existing = await getCredentialRow(db, tenantId, projectId, userId);
   if (!existing) return;
 
-  if (existing.connectionId) {
-    await sdk.connections.disconnect(existing.connectionId);
-  } else {
-    await sdk.secrets.delete(existing.secretRef);
+  // Tolerate the vault entry already being gone (e.g. admin vault cleanup,
+  // or a connection revoked out-of-band) — otherwise the user can never
+  // disconnect a credential whose backing secret no longer exists.
+  try {
+    if (existing.connectionId) {
+      await sdk.connections.disconnect(existing.connectionId);
+    } else if (existing.secretRef && !existing.secretRef.startsWith('revoked:')) {
+      await sdk.secrets.delete(existing.secretRef);
+    }
+  } catch {
+    // Continue marking the credential disconnected even if the vault entry
+    // or connection was already removed.
   }
   await db
     .update(plainwriteCredentials)
