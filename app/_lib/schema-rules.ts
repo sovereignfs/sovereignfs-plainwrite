@@ -13,7 +13,12 @@ export function inferCollectionSchema(contents: string[]): CollectionSchemaField
   const fields = new Map<string, { type: SchemaFieldType; observed: number }>();
 
   for (const content of contents) {
-    const data = matter(content).data;
+    // `{}` disables gray-matter's same-content cache (see editor-rules.ts's
+    // parseMarkdownDocument for the full explanation) — without it, two
+    // files in `contents` with byte-identical text (e.g. both freshly
+    // scaffolded from the same template) would have the second one's
+    // `.data` come back stale, undercounting that file's fields.
+    const data = matter(content, {}).data;
     for (const [name, value] of Object.entries(data)) {
       const nextType = inferFieldType(value);
       if (!nextType) continue;

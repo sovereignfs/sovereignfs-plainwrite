@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Button, FormField, Input, NavTabs, PageHeader, StatusBadge } from '@sovereignfs/ui';
+import { Button, NavTabs, PageHeader, StatusBadge } from '@sovereignfs/ui';
 import {
-  createContentFile,
   getProject,
   listContentFiles,
   publishAllCommittedDrafts,
   stageContentDeletion,
   syncProjectContent,
 } from '../_lib/actions';
+import { NewPostDialog } from '../_components/NewPostDialog';
 import { PublishAllForm } from '../_components/PublishAllForm';
 import { SyncContentForm } from '../_components/SyncContentForm';
 import { groupContentFiles } from '../_lib/content-rules';
@@ -46,7 +46,10 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
   const userCanEdit = canEditProject(project.currentUserRole);
   const userCanManage = canManageProject(project.currentUserRole);
   const repositoryLabel = `${project.repoOwner}/${project.repoName}`;
-  const committedCount = contentFiles.filter((file) => file.status === 'committed').length;
+  const readyPosts = contentFiles
+    .filter((file) => file.status === 'committed')
+    .map((file) => ({ path: file.path, filename: file.filename }));
+  const sections = [...new Set(contentFiles.map((file) => file.collection).filter(Boolean))].sort() as string[];
 
   const visibleFiles =
     activeTab === 'all' ? contentFiles : contentFiles.filter((file) => file.status === activeTab);
@@ -67,51 +70,30 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
         title={project.name}
         description={`${repositoryLabel} · ${project.branch}`}
         action={
-          <StatusBadge status={project.archivedAt ? 'conflict' : 'unmodified'}>
-            {formatProjectRole(project.currentUserRole)}
-          </StatusBadge>
+          <div className={styles.headerActions}>
+            <StatusBadge status={project.archivedAt ? 'conflict' : 'unmodified'}>
+              {formatProjectRole(project.currentUserRole)}
+            </StatusBadge>
+            {userCanEdit ? <NewPostDialog projectId={projectId} sections={sections} /> : null}
+          </div>
         }
       />
 
       <section className={styles.actionsPanel} aria-label="Project actions">
         <div>
           <h2>Next actions</h2>
-          <p>Check for site updates, write a new post, or manage who can write here.</p>
+          <p>Check for site updates, put ready posts live, or manage who can write here.</p>
         </div>
         <div className={styles.actions}>
           {userCanEdit ? <SyncContentForm action={syncProjectContent.bind(null, projectId)} /> : null}
           {userCanEdit ? (
-            <PublishAllForm
-              action={publishAllCommittedDrafts.bind(null, projectId)}
-              committedCount={committedCount}
-            />
+            <PublishAllForm action={publishAllCommittedDrafts.bind(null, projectId)} readyPosts={readyPosts} />
           ) : null}
           <Link href={`/plainwrite/${projectId}/settings`}>
             {userCanManage ? 'Manage site' : 'View settings'}
           </Link>
         </div>
       </section>
-
-      {userCanEdit ? (
-        <section className={styles.newFilePanel} aria-labelledby="new-file">
-          <div>
-            <h2 id="new-file">New post</h2>
-            <p>
-              Write a new post in <strong>{project.pathPrefix}</strong>. It stays private until you
-              publish it.
-            </p>
-          </div>
-          <form className={styles.newFileForm} action={createContentFile.bind(null, projectId)}>
-            <FormField label="Section">
-              {(field) => <Input {...field} name="collection" placeholder="blog" />}
-            </FormField>
-            <FormField label="Filename">
-              {(field) => <Input {...field} name="filename" placeholder="hello-world.md" required />}
-            </FormField>
-            <Button type="submit">Create post</Button>
-          </form>
-        </section>
-      ) : null}
 
       <section className={styles.contentPanel} aria-labelledby="content-files">
         <div className={styles.cardHeader}>

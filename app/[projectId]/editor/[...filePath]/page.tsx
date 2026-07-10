@@ -9,28 +9,38 @@ import {
   publishCommittedDraft,
   saveDraft,
 } from '../../../_lib/actions';
+import { parseMarkdownDocument } from '../../../_lib/editor-rules';
 import { canEditProject } from '../../../_lib/project-rules';
 import styles from './page.module.css';
 
 interface EditorPageProps {
   params: Promise<{ projectId: string; filePath: string[] }>;
+  searchParams: Promise<{ title?: string }>;
 }
 
-export default async function EditorPage({ params }: EditorPageProps) {
+export default async function EditorPage({ params, searchParams }: EditorPageProps) {
   const { projectId, filePath } = await params;
+  const { title: newFileTitle } = await searchParams;
   const path = filePath.join('/');
   // Project-not-found / access-denied still 404; a remote load failure is
   // surfaced explicitly via editor.loadError instead of being swallowed here,
-  // so it never gets mistaken for "this is a new file".
-  const editor = await getEditorState(projectId, path).catch(() => null);
+  // so it never gets mistaken for "this is a new file". newFileTitle only
+  // affects a genuinely new path with no existing draft (see getEditorState) —
+  // it's a one-time seed from the "New post" dialog, not persisted state.
+  const editor = await getEditorState(projectId, path, newFileTitle).catch(() => null);
   if (!editor) notFound();
   const userCanEdit = canEditProject(editor.currentUserRole);
   const repositoryLabel = `${editor.project.repoOwner}/${editor.project.repoName}`;
+  const frontmatterTitle = editor.loadError
+    ? undefined
+    : parseMarkdownDocument(editor.content).data.title;
+  const displayTitle =
+    typeof frontmatterTitle === 'string' && frontmatterTitle.trim() ? frontmatterTitle : path;
 
   return (
     <div className={styles.page}>
       <PageHeader
-        title={path}
+        title={displayTitle}
         description={`${editor.project.name} · ${repositoryLabel} · ${editor.project.branch}`}
       />
 

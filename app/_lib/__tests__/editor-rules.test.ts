@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildContentFilePath,
+  defaultFrontmatterYaml,
+  defaultMarkdownTemplate,
   parseMarkdownDocument,
   renderSafeMarkdownPreview,
   serializeMarkdownDocument,
@@ -72,6 +74,40 @@ describe('editor rules', () => {
 
   it('returns an empty string for an empty data object', () => {
     expect(serializeStructuredFrontmatter({})).toBe('');
+  });
+
+  it('produces the same result on repeated calls with identical input (gray-matter cache regression)', () => {
+    // gray-matter memoizes matter(input) by content string when called with
+    // no options, and the cached entry is the same object the parser
+    // mutates in place — a second call with byte-identical stringified
+    // frontmatter previously came back empty. Every matter()/matter.stringify
+    // round-trip call site in this module must pass `{}` to opt out of that
+    // cache; this test would fail immediately if one lost that `{}`.
+    const first = serializeStructuredFrontmatter({ title: 'Same title' });
+    const second = serializeStructuredFrontmatter({ title: 'Same title' });
+    const third = serializeStructuredFrontmatter({ title: 'Same title' });
+
+    expect(first).toBe('title: Same title');
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+  });
+
+  it('seeds new-file frontmatter with a writer-typed title, safely YAML-quoted', () => {
+    const yaml = defaultFrontmatterYaml('src/content/blog/hello.md', 'Why: A Special Story');
+    expect(yaml).toBe("title: 'Why: A Special Story'");
+
+    // Same regression as above, exercised through the actual "New post"
+    // code path (defaultMarkdownTemplate), which is called once per
+    // brand-new file and would previously break on the second-or-later
+    // call within a long-running server process.
+    const first = defaultMarkdownTemplate('src/content/blog/hello.md', 'Why: A Special Story');
+    const second = defaultMarkdownTemplate('src/content/blog/hello.md', 'Why: A Special Story');
+    expect(first).toBe("---\ntitle: 'Why: A Special Story'\n---\n\nStart writing here.\n");
+    expect(second).toBe(first);
+  });
+
+  it('falls back to a title derived from the filename when none is provided', () => {
+    expect(defaultFrontmatterYaml('src/content/blog/hello-world.md')).toBe('title: Hello World');
   });
 
   it('builds collection-aware content paths with slugified filenames', () => {

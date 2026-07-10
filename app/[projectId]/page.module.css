@@ -17,6 +17,13 @@
   font-size: var(--sv-font-size-lg);
 }
 
+.headerActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sv-space-2);
+}
+
 .actionsPanel {
   align-items: center;
   display: flex;
@@ -27,41 +34,12 @@
   padding: var(--sv-space-4);
 }
 
-.newFilePanel {
-  display: grid;
-  gap: var(--sv-space-4);
-  border: 1px solid var(--sv-color-border);
-  border-radius: var(--sv-radius-md);
-  background: var(--sv-color-surface-raised);
-  padding: var(--sv-space-5);
-}
-
-.newFilePanel h2 {
-  margin: 0;
-  font-size: var(--sv-font-size-lg);
-}
-
-.actionsPanel p,
-.newFilePanel p {
+.actionsPanel p {
   margin: var(--sv-space-1) 0 0;
   color: var(--sv-color-text-secondary);
 }
 
-.newFileForm {
-  align-items: end;
-  display: grid;
-  gap: var(--sv-space-3);
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1fr) auto;
-}
-
 .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sv-space-2);
-}
-
-.publishAllForm {
-  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: var(--sv-space-2);
@@ -191,10 +169,5 @@
   .actionsPanel {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .newFileForm {
-    align-items: stretch;
-    grid-template-columns: 1fr;
   }
 }

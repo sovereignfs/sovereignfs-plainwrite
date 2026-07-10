@@ -657,7 +657,11 @@ export async function syncProjectContent(
   return { ok: true };
 }
 
-export async function getEditorState(projectId: string, path: string): Promise<EditorState> {
+export async function getEditorState(
+  projectId: string,
+  path: string,
+  newFileTitle?: string,
+): Promise<EditorState> {
   const { db, userId, tenantId } = await getContext();
   const currentUserRole = await requireProjectRole(db, tenantId, projectId, userId, 'viewer');
   const project = await getProjectRow(db, tenantId, projectId);
@@ -742,7 +746,7 @@ export async function getEditorState(projectId: string, path: string): Promise<E
       return {
         project,
         path,
-        content: defaultMarkdownTemplate(path),
+        content: defaultMarkdownTemplate(path, newFileTitle),
         baseSha: cached?.sha ?? null,
         status: 'unmodified',
         commitMessage: null,
@@ -787,9 +791,15 @@ export async function createContentFile(projectId: string, formData: FormData) {
   const project = await getProjectRow(db, tenantId, projectId);
   const filename = formString(formData, 'filename');
   if (!filename) throw new Error('Filename is required.');
+  const title = formString(formData, 'title');
 
   const path = buildContentFilePath(project.pathPrefix, formString(formData, 'collection'), filename);
-  redirect(`/plainwrite/${projectId}/editor/${path}`);
+  // The title carries through as a query param (read once by the editor
+  // page on this first load, never persisted) so the new post's frontmatter
+  // seeds with what the writer actually typed instead of reverse-engineering
+  // a title from the slugified filename.
+  const titleParam = title ? `?title=${encodeURIComponent(title)}` : '';
+  redirect(`/plainwrite/${projectId}/editor/${path}${titleParam}`);
 }
 
 export async function publishCommittedDraft(

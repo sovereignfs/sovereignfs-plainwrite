@@ -18,7 +18,14 @@ export interface MarkdownDocument {
  */
 export function parseMarkdownDocument(content: string): MarkdownDocument {
   try {
-    const parsed = matter(content);
+    // The empty-options object is load-bearing, not decorative: gray-matter
+    // memoizes matter(input) by content string when called with no options
+    // at all, and its cache entry is the SAME object mutated in place by the
+    // parser — a second call with byte-identical content returns that
+    // already-mutated (and now wrong) object instead of re-parsing. Passing
+    // `{}` takes the documented no-cache path. Confirmed via gray-matter's
+    // own source (lib graph: matter() → `if (!options) { check/set cache }`).
+    const parsed = matter(content, {});
     return {
       frontmatterYaml: (parsed.matter ?? '').trim(),
       data: (parsed.data ?? {}) as Record<string, unknown>,
@@ -40,7 +47,11 @@ export function serializeStructuredFrontmatter(data: Record<string, unknown>): s
   const entries = Object.entries(data).filter(([, value]) => value !== undefined);
   if (entries.length === 0) return '';
   const doc = matter.stringify('', Object.fromEntries(entries));
-  return (matter(doc).matter ?? '').trim();
+  // See parseMarkdownDocument's comment: the `{}` disables gray-matter's
+  // broken same-content cache, which otherwise returns a stale/empty result
+  // on a second call with identical stringified frontmatter (e.g. saving
+  // the same field values twice, or two new posts with the same title).
+  return (matter(doc, {}).matter ?? '').trim();
 }
 
 export function serializeMarkdownDocument(frontmatterYaml: string, body: string) {
@@ -49,12 +60,21 @@ export function serializeMarkdownDocument(frontmatterYaml: string, body: string)
   return `---\n${yaml}\n---\n\n${body}`;
 }
 
-export function defaultFrontmatterYaml(filePath: string) {
-  return `title: ${titleFromPath(filePath)}`;
+/**
+ * `title` comes from the "New post" dialog when the writer typed a real
+ * title — reusing `serializeStructuredFrontmatter`'s gray-matter-backed YAML
+ * serialization (rather than string interpolation) means a title containing
+ * `:`, quotes, or other YAML-significant characters still round-trips
+ * safely. Falls back to reverse-engineering a title from the slug for any
+ * new-file path reached without going through that dialog.
+ */
+export function defaultFrontmatterYaml(filePath: string, title?: string) {
+  const resolvedTitle = title?.trim() || titleFromPath(filePath);
+  return serializeStructuredFrontmatter({ title: resolvedTitle });
 }
 
-export function defaultMarkdownTemplate(filePath: string) {
-  return serializeMarkdownDocument(defaultFrontmatterYaml(filePath), 'Start writing here.\n');
+export function defaultMarkdownTemplate(filePath: string, title?: string) {
+  return serializeMarkdownDocument(defaultFrontmatterYaml(filePath, title), 'Start writing here.\n');
 }
 
 export function titleFromPath(filePath: string) {

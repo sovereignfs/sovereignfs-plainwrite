@@ -1,8 +1,7 @@
 # Plainwrite UI redesign — writer-first simplification
 
-**Status:** Phases 1–2 complete — see PLW-019/PLW-020 in `roadmap.md`. Phases
-3–6 (new-post/publish flow, conflict review, connect wizard, editor modes)
-remain proposals.
+**Status:** Phases 1–3 complete — see PLW-019/PLW-020/PLW-021 in `roadmap.md`.
+Phases 4–6 (conflict review, connect wizard, editor modes) remain proposals.
 **Date:** 2026-07-10
 **Wireframe assets:** [`docs/adhoc/plainwrite-ui-redesign/`](./plainwrite-ui-redesign/) (SVG, one per screen)
 
@@ -225,8 +224,10 @@ Each phase is shippable on its own and roughly maps to one roadmap task.
 2. **Navigation + home restructure** ✅ — site cards (both home states),
    content home with pipeline tabs, settings split into the owner-only setup
    area. (PLW-020)
-3. **New post + publish flow** — title-first dialog, publish confirmation with
-   held-back conflicts (inline `ActionResult` errors already exist).
+3. **New post + publish flow** ✅ — title-first dialog, publish confirmation
+   listing what goes live. No true conflict preflight yet (that's phase 4);
+   skipped conflicts still resolve server-side and surface via the existing
+   inline `ActionResult` message. (PLW-021)
 4. **Conflict review** — the two-version screen and the baseSha-refresh /
    override actions.
 5. **Connect-a-site wizard** — detection endpoint + 3-step flow, replacing the

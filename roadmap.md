@@ -929,6 +929,87 @@ Verification:
 - `pnpm typecheck`, `pnpm lint`, `pnpm test` (94/94), `pnpm format:check`,
   `pnpm build` all pass from the platform root.
 
+### ✅ PLW-021 New Post And Publish Flow
+
+**Spec refs:** `docs/adhoc/plainwrite-ui-redesign.md` (proposal), phase 3 of 6.
+
+**Status:** ✅ Complete.
+
+Phase 3 of the writer-first UI redesign: a title-first "New post" dialog
+replacing the old Collection+Filename form, and a publish confirmation
+dialog listing what's about to go live in place of the bare "Publish all"
+button. Builds on PLW-019/PLW-020.
+
+Progress as of 2026-07-10:
+
+- [x] `NewPostDialog.tsx` (new): title field first; filename auto-derived
+  from the title via slugify, shown as a muted "Will be saved as … ·
+  change" preview with a manual-override escape hatch; section picker
+  renders as clickable pills sourced from the project's existing
+  collections (falls back to a free-text field when there are none yet).
+- [x] `createContentFile` now accepts the raw title and carries it through
+  to the editor as a one-time `?title=` query param (never persisted) so a
+  brand-new post's frontmatter seeds with what the writer actually typed
+  instead of reverse-engineering Title Case from the slug.
+  `getEditorState`/`defaultFrontmatterYaml`/`defaultMarkdownTemplate` gained
+  an optional `title` parameter for this.
+- [x] Editor page header now shows the post's real frontmatter `title`
+  (parsed via `parseMarkdownDocument`) instead of the raw file path.
+- [x] **Fixed a real gray-matter cache bug** found while testing the above:
+  `matter(input)`/`matter.stringify(...)` called with no `options` argument
+  memoize by content string, and the cached entry is the *same object* the
+  parser mutates in place — a second call with byte-identical input
+  (e.g. saving the same title twice, or two new posts started with the same
+  title) returned a stale/empty result instead of re-parsing. Every
+  `matter()`/`matter.stringify()` call site in `editor-rules.ts` and
+  `schema-rules.ts` now passes `{}` to opt out of the cache. This was
+  pre-existing and would have silently corrupted the live structured
+  frontmatter editor (which calls `serializeStructuredFrontmatter` on every
+  field edit) after the second identical save in a session, not just the
+  new title-seeding path. Regression tests added.
+- [x] `PublishAllForm.tsx` rewritten: "Put N live" now opens a confirmation
+  Dialog listing the ready-to-publish posts by filename, with the
+  skip-conflicts checkbox and the actual Publish button moved inside it.
+  Inline `ActionResult` errors render inside the dialog (kept open on
+  failure); the dialog auto-closes on success, and a success message
+  (e.g. noting skipped conflicts) surfaces below the trigger button. No true
+  conflict preflight yet — that is phase 4 ("Conflict review").
+- [x] Added regression tests: `actions-create-content-file.test.ts` (title
+  query-param encoding, filename requirement), new cases in
+  `actions-editor-lifecycle.test.ts` (new-file title seeding vs. slug
+  fallback), and gray-matter cache-repro cases in `editor-rules.test.ts`.
+- [x] **Live-verified** end to end via the dev server (not just automated
+  checks, since this phase touches interactive client components):
+  registered/reused a test account, opened "New post", typed a title
+  containing a colon (`Why: We Moved to a Static Site`) to specifically
+  exercise the YAML-quoting fix, confirmed the redirect URL and the
+  editor's frontmatter/header both round-tripped the title exactly, saved
+  and confirmed the status label updated correctly, and opened the publish
+  confirmation dialog through to its (expected, no-token) inline error
+  state without any crash or state loss.
+  - **Found and fixed a second live-only bug** during this pass: a
+    brand-new, never-saved post showed "Live on site" as its status
+    (`formatPostStatus('unmodified')` from PLW-019's copy pass, correct for
+    an existing synced post but wrong for a new one with no draft yet).
+    Fixed via a `baseSha`-aware `editorStatusLabel` helper in
+    `MarkdownEditor.tsx` that shows "New post" instead when
+    `status === 'unmodified' && baseSha === null`.
+
+Acceptance criteria:
+
+- A writer can create a post by typing a title alone; the filename and
+  frontmatter title are both derived correctly, including titles containing
+  YAML-significant characters.
+- Publishing shows what will go live before it happens, and holds back /
+  explains conflicts without crashing.
+
+Verification:
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm test` (102/102), `pnpm format:check`,
+  and a full `pnpm build` all pass from the platform root. Live-verified in
+  the browser (see above) — the first phase of this epic where that was
+  possible this session.
+
 ## Future Backlog
 
 These items are intentionally outside v1.0 unless reprioritized.

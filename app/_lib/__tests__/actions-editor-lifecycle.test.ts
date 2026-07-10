@@ -194,6 +194,32 @@ describe('editor lifecycle — open, save, commit, discard, reopen', () => {
   });
 });
 
+describe('editor state — new post title seeding', () => {
+  it('seeds a brand-new file\'s frontmatter with the title from the "New post" dialog', async () => {
+    const { GitProviderError } = await import('../git-providers');
+    getFileContent.mockRejectedValueOnce(new GitProviderError('Not found', 404));
+    const { getEditorState } = await import('../actions');
+
+    const state = await getEditorState('project-1', PATH, 'Why: A Special Story');
+
+    expect(state.status).toBe('unmodified');
+    expect(state.loadError).toBeNull();
+    expect(state.content).toBe(
+      "---\ntitle: 'Why: A Special Story'\n---\n\nStart writing here.\n",
+    );
+  });
+
+  it('falls back to a slug-derived title when no title is given for a new file', async () => {
+    const { GitProviderError } = await import('../git-providers');
+    getFileContent.mockRejectedValueOnce(new GitProviderError('Not found', 404));
+    const { getEditorState } = await import('../actions');
+
+    const state = await getEditorState('project-1', PATH);
+
+    expect(state.content).toBe('---\ntitle: Hello\n---\n\nStart writing here.\n');
+  });
+});
+
 describe('editor state — collection schema fields', () => {
   it('returns no schema fields when the collection has no schema defined', async () => {
     const { getEditorState } = await import('../actions');

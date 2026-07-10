@@ -17,6 +17,19 @@ import styles from './MarkdownEditor.module.css';
 
 const AUTOSAVE_IDLE_MS = 2000;
 
+/**
+ * `formatPostStatus('unmodified')` reads "Live on site" — correct for an
+ * existing post that matches what's already published, but actively wrong
+ * for a brand-new post that has never been saved yet (same 'unmodified'
+ * status, because no draft exists to diverge from). `baseSha` is null only
+ * for that new-file case (see getEditorState), so it's the signal that
+ * disambiguates the two — found via live testing the "New post" dialog.
+ */
+function editorStatusLabel(status: string, baseSha: string | null) {
+  if (status === 'unmodified' && baseSha === null) return 'New post';
+  return formatPostStatus(status);
+}
+
 interface MarkdownEditorProps {
   path: string;
   content: string;
@@ -186,7 +199,7 @@ export function MarkdownEditor({
               <p className={styles.eyebrow}>Content</p>
               <h2 id="body-heading">Post</h2>
             </div>
-            <span>{formatPostStatus(status)}</span>
+            <span>{editorStatusLabel(status, baseSha)}</span>
           </div>
           <CodeTextarea
             aria-label="Post content"
@@ -202,7 +215,7 @@ export function MarkdownEditor({
         <section className={styles.commitPanel} aria-labelledby="commit-heading">
           <div>
             <p className={styles.eyebrow}>Current state</p>
-            <h2 id="commit-heading">{formatPostStatus(status)}</h2>
+            <h2 id="commit-heading">{editorStatusLabel(status, baseSha)}</h2>
             <p>Changes stay private until you publish them.</p>
             {userCanEdit && autosaveState !== 'idle' ? (
               <p className={styles.autosaveStatus} role={autosaveState === 'error' ? 'alert' : undefined}>
