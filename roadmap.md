@@ -1345,6 +1345,29 @@ Verification:
   `pnpm format:check`, and a full `pnpm build --force` all pass.
 - Live-verified across screens and breakpoints (see above).
 
+### ✅ PLW-026 Remove The Stale Provider Chip From The Sites Header
+
+**Spec refs:** `docs/adhoc/plainwrite-ui-redesign.md` §4 (screens).
+
+**Status:** ✅ Complete (patch — UI polish).
+
+The Sites header carried a hardcoded `Badge` reading "GitHub + Astro" next
+to the "+ Connect a site" button. It went stale when the Jekyll adapter
+landed (PLW-012) — the plugin now supports Astro *and* Jekyll — and it was
+never in the wireframe (§4 shows title + description + one button, no
+provider chip). It also read as a status badge (`variant="status"`) beside
+the primary action, crowding the top-right. Removed it; the button now
+stands alone as the page's single primary CTA. Supported providers/SSGs
+are a connect-time concern that already surface contextually in the
+"Connect a site" wizard, so no information is lost. The button itself is
+unchanged — it's the standard design-system `Button md` primary (42px,
+14px/600), consistent with every other primary action.
+
+Verification: `pnpm test` (156/156), `pnpm typecheck`, `pnpm lint`,
+`pnpm format:check`, and a full `pnpm build` all pass. Live-verified the
+header on the Sites page (chip gone, button reads cleanly), zero console
+errors.
+
 ## Future Backlog
 
 These items are intentionally outside v1.0 unless reprioritized.

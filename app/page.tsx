@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Badge, Card, EmptyState, PageHeader, StatusBadge } from '@sovereignfs/ui';
+import { Card, EmptyState, PageHeader, StatusBadge } from '@sovereignfs/ui';
 import { NewProjectDialog } from './_components/NewProjectDialog';
 import { listProjects, type ProjectListItem } from './_lib/actions';
 import { formatPipelineSummary, formatProjectRole } from './_lib/copy';
@@ -17,14 +17,7 @@ export default async function ProjectsPage() {
       <PageHeader
         title="Your sites"
         description="Write and publish content for your sites."
-        action={
-          <div className={styles.headerActions}>
-            <Badge variant="status" status="neutral">
-              GitHub + Astro
-            </Badge>
-            <NewProjectDialog />
-          </div>
-        }
+        action={<NewProjectDialog />}
       />
 
       {projects.length === 0 ? (

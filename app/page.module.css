@@ -5,13 +5,6 @@
   max-width: 1040px;
 }
 
-.headerActions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sv-space-2);
-}
-
 .projectGrid {
   display: grid;
   gap: var(--sv-space-4);

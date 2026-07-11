@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "fs.sovereign.plainwrite",
   "name": "Plainwrite",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "A git-backed content editor for static site generators.",
   "type": "sovereign",
   "runtime": "native",
